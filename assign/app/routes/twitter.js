@@ -29,7 +29,7 @@ router.post('/:number', (req,res) => {
                 tweetArray.push(x)
            }
            if(tweetArray.length === tweets.length*req.params.number){
-            res.set('Access-Control-Allow-Origin', '*');
+            console.log("done")
             res.write(JSON.stringify(tweetArray));
             res.end();
            }
