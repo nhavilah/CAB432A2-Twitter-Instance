@@ -54,36 +54,36 @@ router.post('/:number', (req,res) => {
     const currentMonth = currentDate.getMonth(); // Be careful! January is 0, not 1
     const currentYear = currentDate.getFullYear();
     const timestamp = currentDayOfMonth+'-'+currentMonth+'-'+currentYear
-    for(let i = 0; i < tweets.length; i++) {
-        T.get('search/tweets', { q:tweets[i] , count: req.params.number }, function(err, data, response) {
-            for (let index = 0; index < data.statuses.length; index++) {
-                x = data.statuses[index].text;
-                tweetArray.push(x)
-           }
-           if(tweetArray.length === tweets.length*req.params.number){
-            let tweetBody = tweetArray
-            const redisKey = `twitter:${timestamp}`;
-            const s3Key = `twitter-${timestamp}`;
+    const redisKey = `twitter:${timestamp}`;
+    const s3Key = `twitter-${timestamp}`;
 
-            //try the cache
-            return redisClient.get(redisKey,(err,result) => {
+    //try the cache
+    return redisClient.get(redisKey,(err,result) => {
+        if(result) {
+            //serve from cache
+            const resultJSON = JSON.parse(result);
+            return res.status(200).json(resultJSON);
+        }else{
+
+            //check s3
+            const params = { Bucket: bucketName, Key: s3Key};
+            //check s3 and serve if it exists in there
+            return new AWS.S3({apiVersion: '2006-03-01'}).getObject(params, (err,result) => {
                 if(result) {
-                    //serve from cache
-                    const resultJSON = JSON.parse(result);
+                    //serve from s3 and store in redis just in case
+                    redisClient.setex(redisKey,3600,JSON.stringify({...tweetBody,}));
+                    console.log(result);
+                    const resultJSON = JSON.parse(result.Body);
                     return res.status(200).json(resultJSON);
-                }else{
-
-                    //check s3
-                    const params = { Bucket: bucketName, Key: s3Key};
-                    //check s3 and serve if it exists in there
-                    return new AWS.S3({apiVersion: '2006-03-01'}).getObject(params, (err,result) => {
-                        if(result) {
-                            //serve from s3 and store in redis just in case
-                            redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis Cache',...tweetBody,}));
-                            console.log(result);
-                            const resultJSON = JSON.parse(result.Body);
-                            return res.status(200).json(resultJSON);
-                        } else {
+                } else {
+                    for(let i = 0; i < tweets.length; i++) {
+                        T.get('search/tweets', { q:tweets[i] , count: req.params.number }, function(err, data, response) {
+                            for (let index = 0; index < data.statuses.length; index++) {
+                                x = data.statuses[index].text;
+                                tweetArray.push(x)
+                            }
+                            if(tweetArray.length === tweets.length*req.params.number){
+                            let tweetBody = tweetArray
                             //serve from wikipedia api and store in s3 and redis
                             const body = JSON.stringify({ source: 'S3 Bucket', ...tweetBody});
                             const objectParams = {Bucket: bucketName, Key: s3Key, Body: body};
@@ -91,22 +91,16 @@ router.post('/:number', (req,res) => {
                             uploadPromise.then(function(data) {
                                 console.log("Successfully uploaded data to " + bucketName + "/" + s3Key);
                             });
-                            redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis Cache',...tweetBody,}));
+                            redisClient.setex(redisKey,3600,JSON.stringify({...tweetBody,}));
                             res.write(JSON.stringify(tweetBody));
                             return res.end();
-                        }
-                    })
+                            }
+                        })
+                    }
                 }
-            });
-           }
-        })
-    }
-
+            })
+        }
+    });    
+});
     
-    });
-    
-    
-    
-
-
 module.exports = router;
