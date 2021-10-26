@@ -56,24 +56,26 @@ router.post('/:number', (req,res) => {
     const timestamp = currentDayOfMonth+'-'+currentMonth+'-'+currentYear
     const redisKey = `twitter:${timestamp}`;
     const s3Key = `twitter-${timestamp}`;
+    
 
     //try the cache
     return redisClient.get(redisKey,(err,result) => {
-        if(result) {
+        if(result !== null) {
             //serve from cache
             const resultJSON = JSON.parse(result);
-            return res.status(200).json(resultJSON);
-        }else{
+            resultJSON.source = 'Redis Cache';
 
+            return res.send(resultJSON);
+        }
+        else{
             //check s3
             const params = { Bucket: bucketName, Key: s3Key};
             //check s3 and serve if it exists in there
             return new AWS.S3({apiVersion: '2006-03-01'}).getObject(params, (err,result) => {
                 if(result) {
                     //serve from s3 and store in redis just in case
-                    redisClient.setex(redisKey,3600,JSON.stringify({...tweetBody,}));
-                    console.log(result);
                     const resultJSON = JSON.parse(result.Body);
+                    redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...resultJSON}));
                     return res.status(200).json(resultJSON);
                 } else {
                     for(let i = 0; i < tweets.length; i++) {
@@ -91,7 +93,7 @@ router.post('/:number', (req,res) => {
                             uploadPromise.then(function(data) {
                                 console.log("Successfully uploaded data to " + bucketName + "/" + s3Key);
                             });
-                            redisClient.setex(redisKey,3600,JSON.stringify({...tweetBody,}));
+                            redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...tweetBody,}));
                             res.write(JSON.stringify(tweetBody));
                             return res.end();
                             }
