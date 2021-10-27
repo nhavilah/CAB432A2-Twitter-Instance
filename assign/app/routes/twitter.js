@@ -49,6 +49,7 @@ router.post('/:number', (req,res) => {
     //keep the tweets array as a public item so we can apppend all tweets at to it
     const tweetArray=[]
     let tweets = req.body.tweets
+    console.log(tweets)
     const currentDate = new Date();
     const currentDayOfMonth = currentDate.getDate();
     const currentMonth = currentDate.getMonth(); // Be careful! January is 0, not 1
@@ -76,7 +77,7 @@ router.post('/:number', (req,res) => {
                     //serve from s3 and store in redis just in case
                     const resultJSON = JSON.parse(result.Body);
                     redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...resultJSON}));
-                    return res.status(200).json(resultJSON);
+                    return res.end(resultJSON);
                 } else {
                     for(let i = 0; i < tweets.length; i++) {
                         T.get('search/tweets', { q:tweets[i] , count: req.params.number }, function(err, data, response) {
