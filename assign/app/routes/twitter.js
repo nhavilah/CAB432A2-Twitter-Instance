@@ -89,7 +89,7 @@ router.post('/:number', (req,res) => {
                             }
                             console.log(tweetArray.length)
                             
-                            if(tweetArray.length === tweets.length*req.params.number){
+                            if(tweetArray.length >= (tweets.length*req.params.number)-1){
                             let tweetBody = tweetArray
                             //serve from wikipedia api and store in s3 and redis
                             const body = JSON.stringify({ source: 'S3 Bucket', ...tweetBody});
