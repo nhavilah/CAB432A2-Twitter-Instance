@@ -47,7 +47,7 @@ var T = new Twit({
 
 router.post('/:number', (req,res) => {
     //keep the tweets array as a public item so we can apppend all tweets at to it
-    const tweetArray=[]
+    let tweetArray=[]
     let tweets = req.body.tweets
     console.log(tweets)
     const currentDate = new Date();
@@ -55,12 +55,13 @@ router.post('/:number', (req,res) => {
     const currentMonth = currentDate.getMonth(); // Be careful! January is 0, not 1
     const currentYear = currentDate.getFullYear();
     const timestamp = currentDayOfMonth+'-'+currentMonth+'-'+currentYear
-    const redisKey = `twitter:${timestamp}`;
-    const s3Key = `twitter-${timestamp}`;
+    const redisKey = `twitter:${tweets}`;
+    const s3Key = `twitter-${tweets}`;
     
 
     //try the cache
     return redisClient.get(redisKey,(err,result) => {
+        console.log(result)
         if(result !== null) {
             //serve from cache
             const resultJSON = JSON.parse(result);
@@ -77,6 +78,7 @@ router.post('/:number', (req,res) => {
                     //serve from s3 and store in redis just in case
                     const resultJSON = JSON.parse(result.Body);
                     redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...resultJSON}));
+                    resultJSON.source = 'S3';
                     return res.end(resultJSON);
                 } else {
                     for(let i = 0; i < tweets.length; i++) {
@@ -85,6 +87,8 @@ router.post('/:number', (req,res) => {
                                 x = data.statuses[index].text;
                                 tweetArray.push(x)
                             }
+                            console.log(tweetArray.length)
+                            
                             if(tweetArray.length === tweets.length*req.params.number){
                             let tweetBody = tweetArray
                             //serve from wikipedia api and store in s3 and redis
@@ -95,8 +99,7 @@ router.post('/:number', (req,res) => {
                                 console.log("Successfully uploaded data to " + bucketName + "/" + s3Key);
                             });
                             redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...tweetBody,}));
-                            res.write(JSON.stringify(tweetBody));
-                            return res.end();
+                            res.send(JSON.parse(body));
                             }
                         })
                     }
@@ -106,4 +109,4 @@ router.post('/:number', (req,res) => {
     });    
 });
     
-module.exports = router;
+module.exports = router; 
