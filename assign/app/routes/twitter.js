@@ -79,28 +79,33 @@ router.post('/:number', (req,res) => {
                     const resultJSON = JSON.parse(result.Body);
                     redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...resultJSON}));
                     resultJSON.source = 'S3';
-                    return res.end(resultJSON);
+                    return res.end(JSON.stringify(resultJSON));
                 } else {
                     for(let i = 0; i < tweets.length; i++) {
                         T.get('search/tweets', { q:tweets[i] , count: req.params.number }, function(err, data, response) {
-                            for (let index = 0; index < data.statuses.length; index++) {
-                                x = data.statuses[index].text;
-                                tweetArray.push(x)
+                            if(data.statuses.length >= req.params.number-2){
+                                for (let index = 0; index < data.statuses.length; index++) {
+                                    x = data.statuses[index].text;
+                                    tweetArray.push(x)
+                                }
+                                
+                                if(tweetArray.length >= (tweets.length*req.params.number)-1){
+                                let tweetBody = tweetArray
+                                //serve from wikipedia api and store in s3 and redis
+                                const body = JSON.stringify({ source: 'S3 Bucket', ...tweetBody});
+                                const objectParams = {Bucket: bucketName, Key: s3Key, Body: body};
+                                const uploadPromise = new AWS.S3({apiVersion: '2006-03-01'}).putObject(objectParams).promise();
+                                uploadPromise.then(function(data) {
+                                    console.log("Successfully uploaded data to " + bucketName + "/" + s3Key);
+                                });
+                                redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...tweetBody,}));
+                                res.end(body);
+                                }
                             }
-                            console.log(tweetArray.length)
-                            
-                            if(tweetArray.length >= (tweets.length*req.params.number)-1){
-                            let tweetBody = tweetArray
-                            //serve from wikipedia api and store in s3 and redis
-                            const body = JSON.stringify({ source: 'S3 Bucket', ...tweetBody});
-                            const objectParams = {Bucket: bucketName, Key: s3Key, Body: body};
-                            const uploadPromise = new AWS.S3({apiVersion: '2006-03-01'}).putObject(objectParams).promise();
-                            uploadPromise.then(function(data) {
-                                console.log("Successfully uploaded data to " + bucketName + "/" + s3Key);
-                            });
-                            redisClient.setex(redisKey,3600,JSON.stringify({source: 'Redis',...tweetBody,}));
-                            res.send(JSON.parse(body));
+                            else{
+                                res.end(JSON.stringify("Bad Tweet Request"));
                             }
+
                         })
                     }
                 }
