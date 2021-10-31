@@ -3,7 +3,7 @@ const app = express();
 const path = require('path');
 const twitterSearch = require('./routes/twitter.js');
 
-const hostname = '127.0.0.1';
+const hostname = '0.0.0.0';
 const port = 3006;
 
 
